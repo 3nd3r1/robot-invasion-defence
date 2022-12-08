@@ -28,7 +28,7 @@ class RobotInvasionDefence:
         self.__gamePlayer = Player()
         self.__gameLevel = Level(1)
 
-        self.__loadGame()
+        self.__startGame()
 
     #Events --->
     #Drag and drop?
