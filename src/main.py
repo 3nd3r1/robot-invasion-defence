@@ -1,14 +1,16 @@
 # TEE PELI TÄHÄN
 
 import pygame as pg
-import random
+from random import randint, choice
 from enum import Enum
+from math import sqrt, atan, cos, sin, pi
 
 
 class Color(Enum):
     GRASS = (0, 154, 23)
     ROAD = (40, 0, 0)
     TOWER = (255, 0, 0)
+    PROJECTILE = (0,0,0)
 
 class Arena_1(Enum):
     BLUEPRINT = [[0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 
@@ -31,22 +33,22 @@ class Arena(Enum):
 
 
 class Robot(pg.sprite.Sprite):
-    def __init__(self, arena) -> None:
+    def __init__(self, arena: Enum) -> None:
         super(Robot, self).__init__()
         self.image = pg.image.load("robo.png")
         self.rect = self.image.get_rect()
-        self.rect.move_ip(arena.ROBOT_DESTINATIONS.value[0])
+        self.rect.center = arena.ROBOT_DESTINATIONS.value[0]
 
         self.destinations = iter(arena.ROBOT_DESTINATIONS.value)
         self.destination = next(self.destinations)
 
-        self.health = 10
+        self.health = 1
         self.damage = 1
         self.speed = [2, 2]
 
     def update(self) -> None:
         if (self.rect.centerx == self.destination[0] and self.rect.centery == self.destination[1]): self.destination = next(self.destinations, None)
-        if self.destination == None: 
+        if self.destination == None or self.health <=0: 
             self.kill()
             return
 
@@ -59,24 +61,92 @@ class Robot(pg.sprite.Sprite):
 
         self.rect = self.rect.move(vel)
 
+class Projectile(pg.sprite.Sprite):
 
+    def __init__(self, start: tuple, target: Robot) -> None:
+        super(Projectile, self).__init__()
+        self.image = pg.surface.Surface((10,10))
+        self.rect = self.image.get_rect()
+        self.rect.center = start
+
+        self.target = target
+        self.speed = [7,7]
+
+        self.draw()
+    
+    def draw(self) -> None:
+        self.image.fill((0,0,1))
+        self.image.set_colorkey((0,0,1))
+        pg.draw.circle(self.image, Color.PROJECTILE.value, (5,5), 5)
+    
+    def update(self) -> None:
+        if (self.target.rect.collidepoint(self.rect.center)): 
+            self.kill()
+            return
+        
+        vel = [0,0]
+        vel[0] = min(self.speed[0], abs(self.rect.centerx - self.target.rect.centerx))
+        vel[1] = min(self.speed[1], abs(self.rect.centery - self.target.rect.centery))
+
+        if (self.rect.centerx - self.target.rect.centerx) > 0: vel[0] = -vel[0] 
+        if (self.rect.centery - self.target.rect.centery) > 0: vel[1] = -vel[1] 
+
+        self.rect = self.rect.move(vel)
+        
 class Tower(pg.sprite.Sprite):
-    def __init__(self, arena, position) -> None:
+    def __init__(self, position: tuple) -> None:
         super(Tower, self).__init__()
         self.image = pg.surface.Surface((50,50))
-        self.drawTower()
         self.rect = self.image.get_rect()
-        self.rect.move_ip(position[0]-25,position[1]-25)
+        self.rect.center = position
 
-        self.health = 50
-        self.damage = 20
-    
-    def drawTower(self) -> None:
-        self.image.fill(Color.GRASS.value)
+        self.damage = 1
+        self.range = 300 # radius of a circle
+        self.firerate = 30 #Frame interval between shots
+
+        self.tickCounter = 0
+
+        self.target = None
+        self.projectiles = pg.sprite.Group()
+
+        self.draw()
+
+    def draw(self) -> None:
+        self.image.fill(0)
+        self.image.set_colorkey((0,0,0))
         pg.draw.circle(self.image, Color.TOWER.value, (25,25), 15)
-        dots = [(25,15),(25,35),(50,30),(50,20)]
-        pg.draw.polygon(self.image, Color.TOWER.value, dots)
 
+        dots = []
+        alph = 0
+        if self.target != None:
+            if self.target.rect.centerx-self.rect.centerx == 0: alph = pi/2
+            else: alph = atan(abs(self.target.rect.centery-self.rect.centery)/abs(self.target.rect.centerx-self.rect.centerx))
+
+            if self.target.rect.centery-self.rect.centery < 0: alph = -alph
+            if self.target.rect.centerx - self.rect.centerx < 0: alph = pi - alph
+
+        dots.append((25+cos(alph+pi/2)*15, 25+sin(alph+pi/2)*15))
+        dots.append((25+cos(alph-pi/2)*15, 25+sin(alph-pi/2)*15))
+        dots.append((25+cos(alph-pi/10)*25, 25+sin(alph-pi/10)*25))
+        dots.append((25+cos(alph+pi/10)*25, 25+sin(alph+pi/10)*25))
+
+        pg.draw.polygon(self.image, Color.TOWER.value, dots)
+    
+    def shoot(self) -> None:
+        if self.target == None: return
+        self.projectiles.add(Projectile(self.rect.center, self.target))
+    
+    def update(self) -> None:
+        self.tickCounter += 1
+        if self.target != None:
+            if self.tickCounter >=self.firerate: self.tickCounter = 0
+            if self.tickCounter == 0: self.shoot()
+            self.draw()
+
+        for projectile in self.projectiles.sprites():
+            projectile.update()
+            if (not projectile.alive()) and (projectile.target.alive()): 
+                projectile.target.health -= self.damage
 
 class Game:
     def __init__(self) -> None:
@@ -89,7 +159,7 @@ class Game:
         self.arena = Arena.ARENA_1.value
 
         self.wave = 1
-        self.waveLength = 60*60  # 1 Minuutti per wave
+        self.waveLength = 60*60  # 60*60 frames (1 minute) per wave
         self.tickCounter = 0
 
         self.coins = 0
@@ -107,25 +177,33 @@ class Game:
             print("wave: {}".format(self.wave))
         self.tickCounter += 1
 
-        self.drawArena()
+        self.drawArena() 
 
-        self.spawnBots()
+        self.spawnBots() 
         for robot in self.robots.sprites():
             robot.update()
             if not robot.alive() and robot.rect.center == self.arena.ROBOT_DESTINATIONS.value[-1]: self.health -= robot.damage
-
+        
+        for tower in self.towers.sprites():
+            tower.target = self.closestRobot(tower)
+            tower.update()
+            tower.projectiles.draw(self.scr)
+            
         self.robots.draw(self.scr)
-
         self.towers.draw(self.scr)
 
         pg.display.flip()
 
     def spawnBots(self) -> None:
-        if random.randint(0, int(100//self.wave)) == 1:
-            self.robots.add(Robot(self.arena))
+        if randint(0, int(100//self.wave)) == 1:
+            newrobot = Robot(self.arena)
+            lvl = randint(1,self.wave)
+            newrobot.health = lvl
+            newrobot.damage = lvl
+            self.robots.add(newrobot)
     
     def spawnTower(self) -> None:
-        self.towers.add(Tower(self.arena, pg.mouse.get_pos()))
+        self.towers.add(Tower(pg.mouse.get_pos()))
 
     def eventCheck(self) -> None:
         for e in pg.event.get():
@@ -152,6 +230,18 @@ class Game:
                 if arenaBlueprint[y][x] == 1:
                     tile = pg.Rect(x*40, y*48, 40, 48)
                     pg.draw.rect(self.scr, Color.ROAD.value, tile)
+    
+    def closestRobot(self, tower: Tower) -> Robot or None:
+        #Distance between the center robot and center of tower
+        #Todo: This should also take into account the size of robot
+        def distance(robot: Robot) -> int:
+            return sqrt((robot.rect.centerx-tower.rect.centerx)**2 + (robot.rect.centery - tower.rect.centery)**2)
+
+        if len(self.robots.sprites()) == 0: return None
+
+        ret = min(self.robots.sprites(), key=distance)
+        if distance(ret)>tower.range: return None
+        else: return ret
 
 
 
