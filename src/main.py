@@ -28,6 +28,8 @@ class Button(pg.sprite.Sprite):
         self.image = pg.Surface((50, 75))
         self.rect = self.image.get_rect()
         self.rect.center = pos
+        
+        self.placing = True
 
         self.font = pg.font.SysFont("Roboto", 32)
 
@@ -220,6 +222,7 @@ class Game:
         self.clock = pg.time.Clock()
 
         self.lost = False
+        self.placingTower = False
 
         self.arena = Arenas["arena_1"]
 
@@ -293,8 +296,8 @@ class Game:
             newrobot.damage = lvl
             self.robots.add(newrobot)
 
-    def spawnTower(self) -> None:
-        self.towers.add(Tower(pg.mouse.get_pos(), "tower_1"))
+    def spawnTower(self, position: tuple, towerType: str) -> None:
+        self.towers.add(Tower(position, towerType))
 
     def eventCheck(self) -> None:
         for e in pg.event.get():
@@ -302,7 +305,15 @@ class Game:
                 exit()
 
             if e.type == pg.MOUSEBUTTONDOWN:
-                self.spawnTower()
+                mousepos = pg.mouse.get_pos()
+                for menu in self.menus.sprites():
+                    self.handleClick(menu.clickedButton(mousepos))
+            
+            if e.type == pg.MOUSEBUTTONUP:
+                if self.placingTower:
+                    mousepos = pg.mouse.get_pos()
+                    self.spawnTower(mousepos)
+
 
     def run(self) -> None:
         while not self.lost:
@@ -326,6 +337,10 @@ class Game:
         sidebar = Sidebar()
         sidebar.addButton("tower_1",(32.5,240))
         self.menus.add(sidebar)
+    
+    def handleClick(self, button: Button) -> None:
+        if not button: return
+        pass
 
     def closestRobot(self, tower: Tower) -> Robot or None:
         # Distance between the center robot and center of tower
