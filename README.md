@@ -26,3 +26,7 @@ Then run these commands (requires Python 3 and pip installed):
 
 -   `py -m pip install requirements.txt` or `pip install requirements.txt`
 -   `py ./src/main.py` or `python3 ./src/main.py`
+
+## Known issues
+
+-   Texts are hidden with some resolutions.
