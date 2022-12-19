@@ -8,9 +8,7 @@ All notable changes to Robot Invasion Defence will be documented in this file.
 
 ### Fixed
 
--   Deleted useless TMC files
-
-## [0.0.1] - 15/12/2022
+## [0.0.1] - 19/12/2022
 
 ### Added
 
